@@ -1,0 +1,1 @@
+package com.mohey.websocketservice.dto;import lombok.AccessLevel;import lombok.AllArgsConstructor;import lombok.Data;import lombok.NoArgsConstructor;@NoArgsConstructor(access = AccessLevel.PRIVATE)@AllArgsConstructor@Datapublic class ReceiveGroup {	private String groupUuid;	private String groupName;	private String groupType;	private String memberUuid;}
