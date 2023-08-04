@@ -1,0 +1,1 @@
+package com.mohey.websocketservice.repository;import org.springframework.data.mongodb.repository.MongoRepository;import com.mohey.websocketservice.dto.ChatRoom;public interface ChatRoomRepository extends MongoRepository<ChatRoom, String> {}
