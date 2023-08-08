@@ -1,0 +1,1 @@
+package com.mohey.websocketservice.dto;import lombok.AllArgsConstructor;import lombok.Data;import lombok.NoArgsConstructor;@NoArgsConstructor@AllArgsConstructor@Datapublic class Location {	private String userUuid;	private String groupUuid;	private String lat; //위도	private String lon; //경도}
