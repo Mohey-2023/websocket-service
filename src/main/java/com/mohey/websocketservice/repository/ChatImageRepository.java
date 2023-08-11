@@ -1,0 +1,1 @@
+package com.mohey.websocketservice.repository;import org.springframework.data.mongodb.repository.MongoRepository;import com.mohey.websocketservice.dto.ChatImage;import com.mohey.websocketservice.dto.ChatMember;public interface ChatImageRepository extends MongoRepository<ChatImage, String>  {}
