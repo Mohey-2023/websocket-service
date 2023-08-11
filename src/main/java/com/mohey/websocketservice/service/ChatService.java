@@ -9,7 +9,6 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
@@ -17,17 +16,13 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessageSendingOperations;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
 import com.amazonaws.HttpMethod;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.GeneratePresignedUrlRequest;
 import com.amazonaws.services.s3.model.GetObjectRequest;
-import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.S3Object;
 import com.mohey.websocketservice.dto.ChatImage;
 import com.mohey.websocketservice.dto.ChatKafka;
@@ -39,6 +34,7 @@ import com.mohey.websocketservice.dto.Group;
 import com.mohey.websocketservice.dto.GroupMember;
 import com.mohey.websocketservice.dto.Location;
 import com.mohey.websocketservice.dto.ReceiveGroup;
+import com.mohey.websocketservice.producer.ChatProducer;
 import com.mohey.websocketservice.repository.ChatImageRepository;
 import com.mohey.websocketservice.repository.ChatMemberRepository;
 import com.mohey.websocketservice.repository.ChatMessageRepository;
@@ -64,27 +60,23 @@ public class ChatService {
 
 	@Value("${cloud.aws.s3.bucket}")
 	private String bucket;
+	private final ChatProducer chatProducer;
 
-	// @Autowired
-	// public ChatService(ChatRepository chatRepository) {
-	// 	this.chatRepository = chatRepository;
+
+	// public String upload(MultipartFile multipartFile, String groupId) throws IOException {
+	// 	String fileName = multipartFile.getOriginalFilename();
+	// 	log.info(fileName);
+	// 	String fileExtension = fileName.substring(fileName.lastIndexOf("."));
+	// 	String imageUrl = groupId + "/" + UUID.randomUUID() + fileExtension;
+	//
+	// 	ObjectMetadata metadata = new ObjectMetadata();
+	// 	metadata.setContentType(multipartFile.getContentType());
+	// 	metadata.setContentLength(multipartFile.getSize());
+	//
+	// 	amazonS3.putObject(bucket, imageUrl, multipartFile.getInputStream(), metadata);
+	// 	log.info(imageUrl);
+	// 	return imageUrl;
 	// }
-
-
-	public String upload(MultipartFile multipartFile, String groupId) throws IOException {
-		String fileName = multipartFile.getOriginalFilename();
-		log.info(fileName);
-		String fileExtension = fileName.substring(fileName.lastIndexOf("."));
-		String imageUrl = groupId + "/" + UUID.randomUUID() + fileExtension;
-
-		ObjectMetadata metadata = new ObjectMetadata();
-		metadata.setContentType(multipartFile.getContentType());
-		metadata.setContentLength(multipartFile.getSize());
-
-		amazonS3.putObject(bucket, imageUrl, multipartFile.getInputStream(), metadata);
-		log.info(imageUrl);
-		return imageUrl;
-	}
 
 	public String requestImage(String fileName, String imageType) {
 		Instant expirationTime = Instant.now().plus(Duration.ofSeconds(30));
@@ -111,7 +103,6 @@ public class ChatService {
 		chatMessage.setSenderName(userName);
 		chatMessage.setSenderUuid(userUuid);
 
-		broadcasting(chatMessage);
 
 		ChatImage chatImage = new ChatImage(chatMessage.getImageUrl(),
 			bucket,
@@ -122,6 +113,8 @@ public class ChatService {
 			groupUuid);
 
 		chatImageRepository.save(chatImage);
+
+		broadcasting(chatMessage);
 
 	}
 
@@ -141,19 +134,19 @@ public class ChatService {
 
 		ChatRoom chatRoom = chatRoomRepository.findById(message.getGroupId()).orElse(null);
 
-    ChatKafka chatKafka = new ChatKafka(message.getGroupId(),
+
+    	ChatKafka chatKafka = new ChatKafka(message.getGroupId(),
 			chatRoom.getGroupName(),
 			message.getSenderUuid(),
 			message.getSenderName(),
 			message.getMessage(),
 			message.getType(),
-      message.getImageUrl(),
+      		message.getImageUrl(),
 			chatRoom.getGroupMembers());
 
 		log.info(chatKafka.toString());
 
-		messageSave(message); //Mongo DB에 message 저장
-		chatProducer.send("chat",chatKafka);
+		chatProducer.send("chat", chatKafka);
 	}
 
 	public void messageSave(ChatMessage message) { //메시지 저장
