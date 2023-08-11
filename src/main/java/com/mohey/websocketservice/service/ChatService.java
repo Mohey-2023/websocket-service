@@ -59,7 +59,7 @@ public class ChatService {
 	private final SimpMessageSendingOperations messagingTemplate;
 	private final AmazonS3 amazonS3;
 
-	@Value("${cloud.aws.s3.bucket}")
+	@Value("${cloud.aws.s3.bucket}/chat")
 	private String bucket;
 	private final ChatProducer chatProducer;
 
