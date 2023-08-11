@@ -31,6 +31,7 @@ import com.mohey.websocketservice.dto.ChatMessage;
 import com.mohey.websocketservice.dto.ChatRoom;
 import com.mohey.websocketservice.dto.FrontRoom;
 import com.mohey.websocketservice.dto.Group;
+// import com.mohey.websocketservice.dto.GroupMember;
 import com.mohey.websocketservice.dto.GroupMember;
 import com.mohey.websocketservice.dto.Location;
 import com.mohey.websocketservice.dto.ReceiveGroup;
@@ -134,6 +135,15 @@ public class ChatService {
 
 		ChatRoom chatRoom = chatRoomRepository.findById(message.getGroupId()).orElse(null);
 
+		List<String>members = chatRoom.getGroupMembers();
+		List<GroupMember> groupMembers = new ArrayList<>(); //kafka에 담을 memberList
+
+		for (String member:members) {
+			ChatMember chatMember = chatMemberRepository.findById(member).orElse(null);
+			GroupMember groupMember = new GroupMember(member, chatMember.getDeviceTokenList());
+			groupMembers.add(groupMember);
+		}
+
 
     	ChatKafka chatKafka = new ChatKafka(message.getGroupId(),
 			chatRoom.getGroupName(),
@@ -142,7 +152,7 @@ public class ChatService {
 			message.getMessage(),
 			message.getType(),
       		message.getImageUrl(),
-			chatRoom.getGroupMembers());
+			groupMembers);
 
 		log.info(chatKafka.toString());
 
@@ -195,6 +205,7 @@ public class ChatService {
 			chatMember.setGroups(new ArrayList<>());
 		}
 		chatMember.getGroups().add(group); //member의 groups에 새로운 group 추가
+		chatMember.setDeviceTokenList(receive.getDeviceTokenList());
 		chatMemberRepository.save(chatMember); //chatting_member collection 저장
 	}
 
@@ -203,11 +214,10 @@ public class ChatService {
 			//chatting_member collection에 저장
 			saveMember(receive);
 
-			//chatting_room collection에 저장
-			GroupMember groupMember = new GroupMember(receive.getMemberUuid(), receive.getDeviceTokenList());
-			List<GroupMember> groupMembers = new ArrayList<>();
-			groupMembers.add(groupMember);
-			ChatRoom chatRoom = new ChatRoom(receive.getGroupUuid(), receive.getGroupName(), receive.getGroupType(),groupMembers);
+
+			List<String> groupMembers = new ArrayList<>();
+			groupMembers.add(receive.getMemberUuid());
+			ChatRoom chatRoom = new ChatRoom(receive.getGroupUuid(), receive.getGroupName(), receive.getGroupType(), groupMembers);
 			chatRoomRepository.save(chatRoom); //chatting_room collection에 저장
 
 		} catch (Exception e) {
@@ -220,16 +230,15 @@ public class ChatService {
 			//chatting_member collection에 저장
 			saveMember(receive);
 
-
 			//chatting_room collection에 저장
 			ChatRoom chatRoom = chatRoomRepository.findById(receive.getGroupUuid()).orElse(null);
 
-			List<GroupMember> groupMembers = chatRoom.getGroupMembers();
+			List<String> groupMembers = chatRoom.getGroupMembers();
 
-			GroupMember groupMember = new GroupMember(receive.getMemberUuid(), receive.getDeviceTokenList());
-			groupMembers.add(groupMember);
+			// GroupMember groupMember = new GroupMember(receive.getMemberUuid(), receive.getDeviceTokenList());
+			groupMembers.add(receive.getMemberUuid());
 
-			ChatRoom newChatRoom = new ChatRoom(receive.getGroupUuid(), receive.getGroupName(), receive.getGroupType(),groupMembers);
+			ChatRoom newChatRoom = new ChatRoom(receive.getGroupUuid(), chatRoom.getGroupName(), chatRoom.getGroupType(), groupMembers);
 			chatRoomRepository.save(newChatRoom); //chatting_room collection에 저장
 
 		} catch (Exception e) {
@@ -243,9 +252,9 @@ public class ChatService {
 
 			ChatRoom chatRoom = chatRoomRepository.findById(receive.getGroupUuid()).orElse(null);
 
-			List<GroupMember> groupMembers = chatRoom.getGroupMembers();
+			List<String> groupMembers = chatRoom.getGroupMembers();
 
-			ChatRoom newChatRoom = new ChatRoom(receive.getGroupUuid(), receive.getGroupName(), receive.getGroupType(),groupMembers);
+			ChatRoom newChatRoom = new ChatRoom(receive.getGroupUuid(), receive.getGroupName(), receive.getGroupType(), groupMembers);
 
 			chatRoomRepository.save(newChatRoom); //chatting_room collection에 저장
 		} catch (Exception e) {
@@ -266,9 +275,11 @@ public class ChatService {
 
 			ChatRoom chatRoom = chatRoomRepository.findById(receive.getGroupUuid()).orElse(null);
 
-			List<GroupMember> groupMembers = chatRoom.getGroupMembers();
-			groupMembers.removeIf(groupMember -> groupMember.getMemberUuid().equals(receive.getMemberUuid()));
+
+			List<String> groupMembers = chatRoom.getGroupMembers();
+			groupMembers.removeIf(member -> member.equals(receive.getMemberUuid()));
 			chatRoom.setGroupMembers(groupMembers);
+
 			chatRoomRepository.save(chatRoom); //chatting_room collection에 저장
 
 		} catch (Exception e) {
