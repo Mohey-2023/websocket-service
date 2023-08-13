@@ -101,6 +101,7 @@ public class ChatService {
 		chatMessage.setGroupId(groupUuid);
 		chatMessage.setImageUrl(imageUrl);
 		chatMessage.setType("image");
+		chatMessage.setMessage("[사진]");
 		chatMessage.setSenderName(userName);
 		chatMessage.setSenderUuid(userUuid);
 

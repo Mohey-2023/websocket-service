@@ -141,13 +141,13 @@ public class ChatController {
 		return new ResponseEntity<>(HttpStatus.OK);
 	}
 
-  @GetMapping(value = "/chats/{member-id}", produces = "application/json;charset=UTF-8")
+  	@GetMapping(value = "/chats/{member-id}", produces = "application/json;charset=UTF-8")
 	public ResponseEntity<List<FrontRoom>> roomList(@PathVariable("member-id") String memberUuid)  { //모임 목록 가져오기
 		List<FrontRoom> frontRooms = chatService.roomList(memberUuid);
 		return new ResponseEntity<>(frontRooms, HttpStatus.OK);
 	}
 
-	@GetMapping("/chats/messages/{chat-id}")
+	@GetMapping(value ="/chats/messages/{chat-id}", produces = "application/json;charset=UTF-8")
 	public ResponseEntity<List<ChatMessage>> chatList(@PathVariable("chat-id") String groupId)  { //채팅 내용 가져오기
 		List<ChatMessage> chatMessages = chatService.chatList(groupId);
 		return new ResponseEntity<>(chatMessages, HttpStatus.OK);
