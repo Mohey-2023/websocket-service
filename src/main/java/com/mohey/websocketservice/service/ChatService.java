@@ -31,7 +31,6 @@ import com.mohey.websocketservice.dto.ChatMessage;
 import com.mohey.websocketservice.dto.ChatRoom;
 import com.mohey.websocketservice.dto.FrontRoom;
 import com.mohey.websocketservice.dto.Group;
-// import com.mohey.websocketservice.dto.GroupMember;
 import com.mohey.websocketservice.dto.GroupMember;
 import com.mohey.websocketservice.dto.Location;
 import com.mohey.websocketservice.dto.ReceiveGroup;
@@ -58,6 +57,7 @@ public class ChatService {
 	private final MongoTemplate mongoTemplate;
 	private final SimpMessageSendingOperations messagingTemplate;
 	private final AmazonS3 amazonS3;
+
 
 	@Value("${cloud.aws.s3.bucket}/chat")
 	private String bucket;
@@ -122,8 +122,12 @@ public class ChatService {
 
 
 	public void broadcasting(ChatMessage message) throws IOException { //받은 메시지 모두에게 보내주기
-		LocalDateTime currentTime = LocalDateTime.now(ZoneId.of("Asia/Seoul"));
-		message.setSendTime(currentTime);
+
+		LocalDateTime currentTime = LocalDateTime.now();
+
+		LocalDateTime seoulTime = currentTime.plusHours(9);
+
+		message.setSendTime(seoulTime);
 
 		messagingTemplate.convertAndSend("/sub/chats/room/" + message.getGroupId(),
 			message); // /sub/chats/room/{roomId} - 구독
@@ -175,7 +179,7 @@ public class ChatService {
 	}
 
 
-	public void connectTime(String userUuid, String groupUuid) { //마지막 접속 시간 update
+		public void connectTime(String userUuid, String groupUuid) { //마지막 접속 시간 update
 
 		Query query = new Query(Criteria.where("memberUuid").is(userUuid));
 		ChatMember chatMember = mongoTemplate.findOne(query, ChatMember.class);
@@ -183,8 +187,10 @@ public class ChatService {
 		List<Group> groups = chatMember.getGroups();
 		for (Group existingGroup : groups) {
 			if (existingGroup.getGroupUuid().equals(groupUuid)) {
-				LocalDateTime currentTime = LocalDateTime.now(ZoneId.of("Asia/Seoul"));
-				existingGroup.setConnect_time(currentTime);
+				LocalDateTime currentTime = LocalDateTime.now();
+				LocalDateTime seoulTime = currentTime.plusHours(9);
+				existingGroup.setConnect_time(seoulTime);
+
 				break;
 			}
 		}
@@ -195,8 +201,10 @@ public class ChatService {
 	public void saveMember(ReceiveGroup receive) {
 		Group group = new Group();
 		group.setGroupUuid(receive.getGroupUuid());
-		LocalDateTime currentTime = LocalDateTime.now(ZoneId.of("Asia/Seoul"));
-		group.setConnect_time(currentTime);
+		LocalDateTime currentTime = LocalDateTime.now();
+		LocalDateTime seoulTime = currentTime.plusHours(9);
+
+		group.setConnect_time(seoulTime);
 
 		ChatMember chatMember = chatMemberRepository.findById(receive.getMemberUuid()).orElse(null);
 
