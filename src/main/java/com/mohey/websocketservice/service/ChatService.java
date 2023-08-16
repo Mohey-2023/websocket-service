@@ -153,7 +153,7 @@ public class ChatService {
 			message.getImageUrl(),
 			groupMembers);
 
-		log.info(chatKafka.toString());
+		// log.info(chatKafka.toString());
 
 		chatProducer.send("chat", chatKafka);
 	}
