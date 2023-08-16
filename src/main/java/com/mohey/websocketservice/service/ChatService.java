@@ -120,7 +120,8 @@ public class ChatService {
 
 	public void broadcasting(ChatMessage message) throws IOException { //받은 메시지 모두에게 보내주기
 
-		Date currentTime = new Date(new Date().getTime() + timeDiff);
+		// Date currentTime = new Date(new Date().getTime() + timeDiff);
+		Date currentTime = new Date(new Date().getTime());
 
 		message.setSendTime(currentTime);
 
@@ -179,7 +180,9 @@ public class ChatService {
 		List<Group> groups = chatMember.getGroups();
 		for (Group existingGroup : groups) {
 			if (existingGroup.getGroupUuid().equals(groupUuid)) {
-				Date currentTime = new Date(new Date().getTime() + timeDiff);
+				// Date currentTime = new Date(new Date().getTime() + timeDiff);
+				// Date currentTime = new Date(new Date().getTime() + timeDiff);
+				Date currentTime = new Date(new Date().getTime());
 				existingGroup.setConnect_time(currentTime);
 
 				break;
@@ -192,7 +195,9 @@ public class ChatService {
 	public void saveMember(ReceiveGroup receive) {
 		Group group = new Group();
 		group.setGroupUuid(receive.getGroupUuid());
-		Date currentTime = new Date(new Date().getTime() + timeDiff);
+		// Date currentTime = new Date(new Date().getTime() + timeDiff);
+		// Date currentTime = new Date(new Date().getTime() + timeDiff);
+		Date currentTime = new Date(new Date().getTime());
 
 		group.setConnect_time(currentTime);
 
