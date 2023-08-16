@@ -93,8 +93,8 @@ public class ChatController {
 			// 사용자 아이디 정보를 WebSocket 세션 속성에 저장
 			accessor.getSessionAttributes().put("userUuid", userUuid);
 			accessor.getSessionAttributes().put("groupUuid", groupUuid);
-			log.info(groupUuid);
-			log.info(userUuid);
+			// log.info(groupUuid);
+			// log.info(userUuid);
 		}
 	}
 
@@ -111,8 +111,8 @@ public class ChatController {
 		if (userUuid != null && groupUuid != null) { //session에 저장되어 있으면(chat)
 			chatService.connectTime(userUuid, groupUuid); //마지막 접속 시간 update
 
-			log.info(userUuid);
-			log.info(groupUuid);
+			// log.info(userUuid);
+			// log.info(groupUuid);
 		}
 
 	}
