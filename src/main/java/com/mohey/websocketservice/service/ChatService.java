@@ -238,9 +238,11 @@ public class ChatService {
 		try {
 			//chatting_member collection에 저장
 			saveMember(receive);
+			System.out.println(receive.toString());
 
 			//chatting_room collection에 저장
 			ChatRoom chatRoom = chatRoomRepository.findById(receive.getGroupUuid()).orElse(null);
+			System.out.println(chatRoom.toString());
 
 			List<String> groupMembers = chatRoom.getGroupMembers();
 
