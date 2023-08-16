@@ -119,6 +119,7 @@ public class ChatController {
 
 	@PostMapping("/chats/create")
 	public ResponseEntity<String> create(@RequestBody ReceiveGroup receive) { //모임 생성
+		System.out.println(receive.toString());
 		chatService.create(receive);
 		return new ResponseEntity<>(HttpStatus.OK);
 	}
