@@ -49,303 +49,304 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ChatService {
 
-	//@Autowired
-	private final ChatMessageRepository chatMessageRepository;
-	private final ChatMemberRepository chatMemberRepository;
-	private final ChatRoomRepository chatRoomRepository;
-	private final ChatImageRepository chatImageRepository;
-	private final MongoTemplate mongoTemplate;
-	private final SimpMessageSendingOperations messagingTemplate;
-	private final AmazonS3 amazonS3;
+    //@Autowired
+    private final ChatMessageRepository chatMessageRepository;
+    private final ChatMemberRepository chatMemberRepository;
+    private final ChatRoomRepository chatRoomRepository;
+    private final ChatImageRepository chatImageRepository;
+    private final MongoTemplate mongoTemplate;
+    private final SimpMessageSendingOperations messagingTemplate;
+    private final AmazonS3 amazonS3;
 
 
-	@Value("${cloud.aws.s3.bucket}/chat")
-	private String bucket;
-	private final ChatProducer chatProducer;
+    @Value("${cloud.aws.s3.bucket}/chat")
+    private String bucket;
+    private final ChatProducer chatProducer;
 
 
-	// public String upload(MultipartFile multipartFile, String groupId) throws IOException {
-	// 	String fileName = multipartFile.getOriginalFilename();
-	// 	log.info(fileName);
-	// 	String fileExtension = fileName.substring(fileName.lastIndexOf("."));
-	// 	String imageUrl = groupId + "/" + UUID.randomUUID() + fileExtension;
-	//
-	// 	ObjectMetadata metadata = new ObjectMetadata();
-	// 	metadata.setContentType(multipartFile.getContentType());
-	// 	metadata.setContentLength(multipartFile.getSize());
-	//
-	// 	amazonS3.putObject(bucket, imageUrl, multipartFile.getInputStream(), metadata);
-	// 	log.info(imageUrl);
-	// 	return imageUrl;
-	// }
+    // public String upload(MultipartFile multipartFile, String groupId) throws IOException {
+    // 	String fileName = multipartFile.getOriginalFilename();
+    // 	log.info(fileName);
+    // 	String fileExtension = fileName.substring(fileName.lastIndexOf("."));
+    // 	String imageUrl = groupId + "/" + UUID.randomUUID() + fileExtension;
+    //
+    // 	ObjectMetadata metadata = new ObjectMetadata();
+    // 	metadata.setContentType(multipartFile.getContentType());
+    // 	metadata.setContentLength(multipartFile.getSize());
+    //
+    // 	amazonS3.putObject(bucket, imageUrl, multipartFile.getInputStream(), metadata);
+    // 	log.info(imageUrl);
+    // 	return imageUrl;
+    // }
 
-	public String requestImage(String fileName, String imageType) {
-		Instant expirationTime = Instant.now().plus(Duration.ofSeconds(30));
-		GeneratePresignedUrlRequest request = new GeneratePresignedUrlRequest(bucket, fileName)
-			.withMethod(HttpMethod.PUT)
-			.withExpiration(Date.from(expirationTime))
-			.withContentType(imageType);
+    public String requestImage(String fileName, String imageType) {
+        Instant expirationTime = Instant.now().plus(Duration.ofSeconds(30));
+        GeneratePresignedUrlRequest request = new GeneratePresignedUrlRequest(bucket, fileName)
+                .withMethod(HttpMethod.PUT)
+                .withExpiration(Date.from(expirationTime))
+                .withContentType(imageType);
 
-		URL presignedUrl = amazonS3.generatePresignedUrl(request);
+        URL presignedUrl = amazonS3.generatePresignedUrl(request);
 
-		return presignedUrl.toString();
-	}
+        return presignedUrl.toString();
+    }
 
-	public void saveImage(String fileName, String userName, String userUuid, String groupUuid) throws IOException {
-		// S3 객체 정보 조회
-		GetObjectRequest getObjectRequest = new GetObjectRequest(bucket, fileName);
-		S3Object s3Object = amazonS3.getObject(getObjectRequest);
-		String imageUrl = s3Object.getObjectContent().getHttpRequest().getURI().toString();
+    public void saveImage(String fileName, String userName, String userUuid, String groupUuid) throws IOException {
+        // S3 객체 정보 조회
+        GetObjectRequest getObjectRequest = new GetObjectRequest(bucket, fileName);
+        S3Object s3Object = amazonS3.getObject(getObjectRequest);
+        String imageUrl = s3Object.getObjectContent().getHttpRequest().getURI().toString();
 
-		ChatMessage chatMessage = new ChatMessage();
-		chatMessage.setGroupId(groupUuid);
-		chatMessage.setImageUrl(imageUrl);
-		chatMessage.setType("image");
-		chatMessage.setMessage("[사진]");
-		chatMessage.setSenderName(userName);
-		chatMessage.setSenderUuid(userUuid);
+        ChatMessage chatMessage = new ChatMessage();
+        chatMessage.setGroupId(groupUuid);
+        chatMessage.setImageUrl(imageUrl);
+        chatMessage.setType("image");
+        chatMessage.setMessage("[사진]");
+        chatMessage.setSenderName(userName);
+        chatMessage.setSenderUuid(userUuid);
 
 
-		ChatImage chatImage = new ChatImage(chatMessage.getImageUrl(),
-			bucket,
-			fileName,
-			Long.toString(s3Object.getObjectMetadata().getContentLength()),
-			userName,
-			userUuid,
-			groupUuid);
+        ChatImage chatImage = new ChatImage(chatMessage.getImageUrl(),
+                bucket,
+                fileName,
+                Long.toString(s3Object.getObjectMetadata().getContentLength()),
+                userName,
+                userUuid,
+                groupUuid);
 
-		chatImageRepository.save(chatImage);
-
-		broadcasting(chatMessage);
-
-	}
-
-
-	public void broadcasting(ChatMessage message) throws IOException { //받은 메시지 모두에게 보내주기
-
-		LocalDateTime currentTime = LocalDateTime.now();
+        chatImageRepository.save(chatImage);
+
+        broadcasting(chatMessage);
+
+    }
+
+
+    public void broadcasting(ChatMessage message) throws IOException { //받은 메시지 모두에게 보내주기
+
+        LocalDateTime currentTime = LocalDateTime.now();
 
-		LocalDateTime seoulTime = currentTime.plusHours(9);
-
-		message.setSendTime(seoulTime);
-
-		messagingTemplate.convertAndSend("/sub/chats/room/" + message.getGroupId(),
-			message); // /sub/chats/room/{roomId} - 구독
-
-		messageSave(message); //Mongo DB에 저장
-
-		//if(ChatMessage.MassageType.JOIN.equals(message.getType()))
-		//message.setMessage(message.getSender() + "님이 입장하셨습니다.");
-
-
-		ChatRoom chatRoom = chatRoomRepository.findById(message.getGroupId()).orElse(null);
-
-		List<String>members = chatRoom.getGroupMembers();
-		List<GroupMember> groupMembers = new ArrayList<>(); //kafka에 담을 memberList
-
-		for (String member:members) {
-			ChatMember chatMember = chatMemberRepository.findById(member).orElse(null);
-			GroupMember groupMember = new GroupMember(member, chatMember.getDeviceTokenList());
-			groupMembers.add(groupMember);
-		}
-
+        LocalDateTime seoulTime = currentTime.plusHours(9);
+
+        message.setSendTime(seoulTime);
+
+        messagingTemplate.convertAndSend("/sub/chats/room/" + message.getGroupId(),
+                message); // /sub/chats/room/{roomId} - 구독
+
+        messageSave(message); //Mongo DB에 저장
+
+        //if(ChatMessage.MassageType.JOIN.equals(message.getType()))
+        //message.setMessage(message.getSender() + "님이 입장하셨습니다.");
+
+
+        ChatRoom chatRoom = chatRoomRepository.findById(message.getGroupId()).orElse(null);
+
+        List<String> members = chatRoom.getGroupMembers();
+        List<GroupMember> groupMembers = new ArrayList<>(); //kafka에 담을 memberList
+
+        for (String member : members) {
+            ChatMember chatMember = chatMemberRepository.findById(member).orElse(null);
+            GroupMember groupMember = new GroupMember(member, chatMember.getDeviceTokenList());
+            groupMembers.add(groupMember);
+        }
+
+
+        ChatKafka chatKafka = new ChatKafka(message.getGroupId(),
+                chatRoom.getGroupName(),
+                message.getSenderUuid(),
+                message.getSenderName(),
+                message.getMessage(),
+                message.getType(),
+                message.getImageUrl(),
+                groupMembers);
+
+        log.info(chatKafka.toString());
+
+        chatProducer.send("chat", chatKafka);
+    }
+
+    public void messageSave(ChatMessage message) { //메시지 저장
+        try {
+            chatMessageRepository.save(message);  //chatting_message collection에 저장
+        } catch (Exception e) {
+            log.error(e.getMessage());
+        }
+    }
 
-    	ChatKafka chatKafka = new ChatKafka(message.getGroupId(),
-			chatRoom.getGroupName(),
-			message.getSenderUuid(),
-			message.getSenderName(),
-			message.getMessage(),
-			message.getType(),
-      		message.getImageUrl(),
-			groupMembers);
-
-		log.info(chatKafka.toString());
-
-		chatProducer.send("chat", chatKafka);
-	}
-
-	public void messageSave(ChatMessage message) { //메시지 저장
-		try {
-			chatMessageRepository.save(message);  //chatting_message collection에 저장
-		} catch (Exception e) {
-			log.error(e.getMessage());
-		}
-	}
-
-	public void shareLocation(Location location) { //받은 위치 모두에게 보내주기
-		// log.info(location.toString());
-		messagingTemplate.convertAndSend("/sub/location/room/" + location.getGroupUuid(),
-			location); // /sub/location/room/{roomId} - 구독
-	}
-
-
-		public void connectTime(String userUuid, String groupUuid) { //마지막 접속 시간 update
-
-		Query query = new Query(Criteria.where("memberUuid").is(userUuid));
-		ChatMember chatMember = mongoTemplate.findOne(query, ChatMember.class);
-
-		List<Group> groups = chatMember.getGroups();
-		for (Group existingGroup : groups) {
-			if (existingGroup.getGroupUuid().equals(groupUuid)) {
-				LocalDateTime currentTime = LocalDateTime.now();
-				LocalDateTime seoulTime = currentTime.plusHours(9);
-				existingGroup.setConnect_time(seoulTime);
-
-				break;
-			}
-		}
-		chatMember.setGroups(groups);
-		mongoTemplate.save(chatMember); //chatting_member collection 저장
-	}
+    public void shareLocation(Location location) { //받은 위치 모두에게 보내주기
+        // log.info(location.toString());
+        messagingTemplate.convertAndSend("/sub/location/room/" + location.getGroupUuid(),
+                location); // /sub/location/room/{roomId} - 구독
+    }
 
-	public void saveMember(ReceiveGroup receive) {
-		Group group = new Group();
-		group.setGroupUuid(receive.getGroupUuid());
-		LocalDateTime currentTime = LocalDateTime.now();
-		LocalDateTime seoulTime = currentTime.plusHours(9);
+
+    public void connectTime(String userUuid, String groupUuid) { //마지막 접속 시간 update
+
+        Query query = new Query(Criteria.where("memberUuid").is(userUuid));
+        ChatMember chatMember = mongoTemplate.findOne(query, ChatMember.class);
+
+        List<Group> groups = chatMember.getGroups();
+        for (Group existingGroup : groups) {
+            if (existingGroup.getGroupUuid().equals(groupUuid)) {
+                LocalDateTime currentTime = LocalDateTime.now();
+                LocalDateTime seoulTime = currentTime.plusHours(9);
+                existingGroup.setConnect_time(seoulTime);
 
-		group.setConnect_time(seoulTime);
+                break;
+            }
+        }
+        chatMember.setGroups(groups);
+        mongoTemplate.save(chatMember); //chatting_member collection 저장
+    }
 
-		ChatMember chatMember = chatMemberRepository.findById(receive.getMemberUuid()).orElse(null);
+    public void saveMember(ReceiveGroup receive) {
+        Group group = new Group();
+        group.setGroupUuid(receive.getGroupUuid());
+        LocalDateTime currentTime = LocalDateTime.now();
+        LocalDateTime seoulTime = currentTime.plusHours(9);
 
-		if (chatMember == null) {
-			chatMember = new ChatMember();
-			chatMember.setMemberUuid(receive.getMemberUuid());
-			chatMember.setGroups(new ArrayList<>());
-		}
-		chatMember.getGroups().add(group); //member의 groups에 새로운 group 추가
-		chatMember.setDeviceTokenList(receive.getDeviceTokenList());
-		chatMemberRepository.save(chatMember); //chatting_member collection 저장
-	}
+        group.setConnect_time(seoulTime);
 
-	public void create(ReceiveGroup receive) { //모임 생성
-		try {
-			//chatting_member collection에 저장
-			saveMember(receive);
+        ChatMember chatMember = chatMemberRepository.findById(receive.getMemberUuid()).orElse(null);
 
+        if (chatMember == null) {
+            chatMember = new ChatMember();
+            chatMember.setMemberUuid(receive.getMemberUuid());
+            chatMember.setGroups(new ArrayList<>());
+        }
+        chatMember.getGroups().add(group); //member의 groups에 새로운 group 추가
+        chatMember.setDeviceTokenList(receive.getDeviceTokenList());
+        chatMemberRepository.save(chatMember); //chatting_member collection 저장
+    }
 
-			List<String> groupMembers = new ArrayList<>();
-			groupMembers.add(receive.getMemberUuid());
-			ChatRoom chatRoom = new ChatRoom(receive.getGroupUuid(), receive.getGroupName(), receive.getGroupType(), groupMembers);
-			chatRoomRepository.save(chatRoom); //chatting_room collection에 저장
+    public void create(ReceiveGroup receive) { //모임 생성
+        try {
+            //chatting_member collection에 저장
+            saveMember(receive);
 
-		} catch (Exception e) {
-			log.error(e.getMessage());
-		}
-	}
 
-	public void accept(ReceiveGroup receive) { //모임 가입
-		try {
-			//chatting_member collection에 저장
-			saveMember(receive);
-			System.out.println(receive.toString());
+            List<String> groupMembers = new ArrayList<>();
+            groupMembers.add(receive.getMemberUuid());
+            ChatRoom chatRoom = new ChatRoom(receive.getGroupUuid(), receive.getGroupName(), receive.getGroupType(), groupMembers);
+            chatRoomRepository.save(chatRoom); //chatting_room collection에 저장
 
-			//chatting_room collection에 저장
-			ChatRoom chatRoom = chatRoomRepository.findById(receive.getGroupUuid()).orElse(null);
-			System.out.println(chatRoom.toString());
+        } catch (Exception e) {
+            log.error(e.getMessage());
+        }
+    }
 
-			List<String> groupMembers = chatRoom.getGroupMembers();
+    public void accept(ReceiveGroup receive) { //모임 가입
+        try {
+            //chatting_member collection에 저장
+            saveMember(receive);
+            System.out.println(receive.toString());
 
-			// GroupMember groupMember = new GroupMember(receive.getMemberUuid(), receive.getDeviceTokenList());
-			groupMembers.add(receive.getMemberUuid());
+            //chatting_room collection에 저장
+            ChatRoom chatRoom = chatRoomRepository.findById(receive.getGroupUuid()).orElse(null);
+            System.out.println(chatRoom+"!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+            System.out.println(chatRoom.toString());
 
-			ChatRoom newChatRoom = new ChatRoom(receive.getGroupUuid(), chatRoom.getGroupName(), chatRoom.getGroupType(), groupMembers);
-			chatRoomRepository.save(newChatRoom); //chatting_room collection에 저장
+            List<String> groupMembers = chatRoom.getGroupMembers();
 
-		} catch (Exception e) {
-			log.error(e.getMessage());
-		}
+            // GroupMember groupMember = new GroupMember(receive.getMemberUuid(), receive.getDeviceTokenList());
+            groupMembers.add(receive.getMemberUuid());
 
-	}
+            ChatRoom newChatRoom = new ChatRoom(receive.getGroupUuid(), chatRoom.getGroupName(), chatRoom.getGroupType(), groupMembers);
 
-	public void modify(ReceiveGroup receive) { //모임 수정
-		try {
+            chatRoomRepository.save(newChatRoom); //chatting_room collection에 저장
 
-			ChatRoom chatRoom = chatRoomRepository.findById(receive.getGroupUuid()).orElse(null);
+        } catch (Exception e) {
+            log.error(e.getMessage());
+        }
 
-			List<String> groupMembers = chatRoom.getGroupMembers();
+    }
 
-			ChatRoom newChatRoom = new ChatRoom(receive.getGroupUuid(), receive.getGroupName(), receive.getGroupType(), groupMembers);
+    public void modify(ReceiveGroup receive) { //모임 수정
+        try {
 
-			chatRoomRepository.save(newChatRoom); //chatting_room collection에 저장
-		} catch (Exception e) {
-			log.error(e.getMessage());
-		}
-	}
+            ChatRoom chatRoom = chatRoomRepository.findById(receive.getGroupUuid()).orElse(null);
 
-	public void exit(ReceiveGroup receive) { //모임 퇴장
-		try {
-			ChatMember chatMember = chatMemberRepository.findById(receive.getMemberUuid()).orElse(null);
-			if (chatMember != null) {
-				List<Group> groups = chatMember.getGroups();
-				groups.removeIf(group -> group.getGroupUuid().equals(receive.getGroupUuid()));
-				chatMember.setGroups(groups);
-				chatMemberRepository.save(chatMember);
-			}
+            List<String> groupMembers = chatRoom.getGroupMembers();
 
+            ChatRoom newChatRoom = new ChatRoom(receive.getGroupUuid(), receive.getGroupName(), receive.getGroupType(), groupMembers);
 
-			ChatRoom chatRoom = chatRoomRepository.findById(receive.getGroupUuid()).orElse(null);
+            chatRoomRepository.save(newChatRoom); //chatting_room collection에 저장
+        } catch (Exception e) {
+            log.error(e.getMessage());
+        }
+    }
 
+    public void exit(ReceiveGroup receive) { //모임 퇴장
+        try {
+            ChatMember chatMember = chatMemberRepository.findById(receive.getMemberUuid()).orElse(null);
+            if (chatMember != null) {
+                List<Group> groups = chatMember.getGroups();
+                groups.removeIf(group -> group.getGroupUuid().equals(receive.getGroupUuid()));
+                chatMember.setGroups(groups);
+                chatMemberRepository.save(chatMember);
+            }
 
-			List<String> groupMembers = chatRoom.getGroupMembers();
-			groupMembers.removeIf(member -> member.equals(receive.getMemberUuid()));
-			chatRoom.setGroupMembers(groupMembers);
 
-			chatRoomRepository.save(chatRoom); //chatting_room collection에 저장
+            ChatRoom chatRoom = chatRoomRepository.findById(receive.getGroupUuid()).orElse(null);
 
-		} catch (Exception e) {
-			log.error(e.getMessage());
-		}
-	}
 
-	public List<FrontRoom> roomList(String memberUuid) { //모임 리스트 불러오기
+            List<String> groupMembers = chatRoom.getGroupMembers();
+            groupMembers.removeIf(member -> member.equals(receive.getMemberUuid()));
+            chatRoom.setGroupMembers(groupMembers);
 
-		List<FrontRoom> frontRooms = new ArrayList<>();
+            chatRoomRepository.save(chatRoom); //chatting_room collection에 저장
 
-		Query query = new Query(Criteria.where("memberUuid").is(memberUuid));
-		ChatMember chatMember = mongoTemplate.findOne(query, ChatMember.class);
+        } catch (Exception e) {
+            log.error(e.getMessage());
+        }
+    }
 
-		List<Group> groups = chatMember.getGroups();
-		for (Group group: groups) {
-			FrontRoom frontRoom = new FrontRoom();
-			String groupUuid = group.getGroupUuid();
-			ChatRoom chatRoom = chatRoomRepository.findById(groupUuid).orElse(null);
+    public List<FrontRoom> roomList(String memberUuid) { //모임 리스트 불러오기
 
-			frontRoom.setGroupName(chatRoom.getGroupName());
-			frontRoom.setGroupType(chatRoom.getGroupType());
-			frontRoom.setGroupUuid(chatRoom.getGroupId());
+        List<FrontRoom> frontRooms = new ArrayList<>();
 
-			Query unreadQuery = new Query(Criteria.where("groupId").is(group.getGroupUuid())
-				.and("sendTime").gt(group.getConnect_time()));
+        Query query = new Query(Criteria.where("memberUuid").is(memberUuid));
+        ChatMember chatMember = mongoTemplate.findOne(query, ChatMember.class);
 
-			frontRoom.setNoRead(mongoTemplate.count(unreadQuery, ChatMessage.class));
+        List<Group> groups = chatMember.getGroups();
+        for (Group group : groups) {
+            FrontRoom frontRoom = new FrontRoom();
+            String groupUuid = group.getGroupUuid();
+            ChatRoom chatRoom = chatRoomRepository.findById(groupUuid).orElse(null);
 
-			Query lastQuery = new Query(Criteria.where("groupId").is(group.getGroupUuid()));
-			lastQuery.with(PageRequest.of(0, 1, Sort.by(Sort.Direction.DESC, "sendTime")));
-			ChatMessage chat = mongoTemplate.findOne(lastQuery, ChatMessage.class);
+            frontRoom.setGroupName(chatRoom.getGroupName());
+            frontRoom.setGroupType(chatRoom.getGroupType());
+            frontRoom.setGroupUuid(chatRoom.getGroupId());
 
-			if (chat != null) {
-				frontRoom.setLastMessage(chat.getMessage());
-				frontRoom.setLastTime(chat.getSendTime());
-			}
+            Query unreadQuery = new Query(Criteria.where("groupId").is(group.getGroupUuid())
+                    .and("sendTime").gt(group.getConnect_time()));
 
-			frontRooms.add(frontRoom);
+            frontRoom.setNoRead(mongoTemplate.count(unreadQuery, ChatMessage.class));
 
-		}
-		return frontRooms;
-	}
+            Query lastQuery = new Query(Criteria.where("groupId").is(group.getGroupUuid()));
+            lastQuery.with(PageRequest.of(0, 1, Sort.by(Sort.Direction.DESC, "sendTime")));
+            ChatMessage chat = mongoTemplate.findOne(lastQuery, ChatMessage.class);
 
+            if (chat != null) {
+                frontRoom.setLastMessage(chat.getMessage());
+                frontRoom.setLastTime(chat.getSendTime());
+            }
 
-	public List<ChatMessage> chatList(String groupId) { //모임 내용 불러오기
+            frontRooms.add(frontRoom);
 
-		Query query = new Query(Criteria.where("groupId").is(groupId));
-		query.with(Sort.by(Sort.Direction.DESC,"sendTime"));
-		List<ChatMessage> chatMessages = mongoTemplate.find(query, ChatMessage.class);
+        }
+        return frontRooms;
+    }
 
-		return chatMessages;
 
-	}
+    public List<ChatMessage> chatList(String groupId) { //모임 내용 불러오기
 
+        Query query = new Query(Criteria.where("groupId").is(groupId));
+        query.with(Sort.by(Sort.Direction.DESC, "sendTime"));
+        List<ChatMessage> chatMessages = mongoTemplate.find(query, ChatMessage.class);
+
+        return chatMessages;
+
+    }
 
 
 }
