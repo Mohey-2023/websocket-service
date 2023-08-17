@@ -129,6 +129,7 @@ public class ChatService {
 			message); // /sub/chats/room/{roomId} - 구독
 
 		messageSave(message); //Mongo DB에 저장
+		connectTime(message.getSenderUuid(), message.getGroupId()); //connection 시간 update
 
 		//if(ChatMessage.MassageType.JOIN.equals(message.getType()))
 		//message.setMessage(message.getSender() + "님이 입장하셨습니다.");
