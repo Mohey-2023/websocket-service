@@ -90,6 +90,8 @@ public class ChatController {
 
 		if (userUuid != null && groupUuid != null) { //header가 있으면(chat) 세션에 저장
 
+			chatService.connectTime(userUuid, groupUuid);
+
 			// 사용자 아이디 정보를 WebSocket 세션 속성에 저장
 			accessor.getSessionAttributes().put("userUuid", userUuid);
 			accessor.getSessionAttributes().put("groupUuid", groupUuid);
